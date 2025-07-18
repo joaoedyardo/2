@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Universal Player</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <style>
+    body {
+      margin: 0;
+      background: linear-gradient(to bottom, #000 30%, #141414);
+      font-family: 'Segoe UI', sans-serif;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px 20px;
+    }
+
+    h1 {
+      font-size: 36px;
+      color: #e50914;
+      margin-bottom: 20px;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+      justify-content: center;
+    }
+
+    input {
+      padding: 10px;
+      border-radius: 5px;
+      border: none;
+      background-color: #333;
+      color: white;
+      width: 220px;
+    }
+
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 5px;
+      background-color: #e50914;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background-color: #b20710;
+    }
+
+    #painelSala {
+      margin-top: 25px;
+      width: 100%;
+      max-width: 900px;
+    }
+
+    video {
+      width: 100%;
+      max-width: 900px;
+      margin-top: 20px;
+      border-radius: 10px;
+      background: black;
+      box-shadow: 0 0 30px rgba(0,0,0,0.6);
+    }
+
+    .room-title {
+      font-size: 18px;
+      margin-bottom: 10px;
+      color: #aaa;
+    }
+
+    .link-controls {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 15px;
+    }
+
+    .link-controls input {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .clear-btn {
+      background: #555;
+    }
+
+    .clear-btn:hover {
+      background: #777;
+    }
+
+    footer {
+      margin-top: 50px;
+      padding: 20px;
+      color: #888;
+      font-size: 13px;
+      text-align: center;
+      border-top: 1px solid #333;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <h1>Universal Player</h1>
+  <div class="controls">
+    <button onclick="criarSala()">Criar Sala</button>
+    <input id="codigoSala" placeholder="Código da sala" maxlength="4">
+    <button onclick="entrarSala()">Entrar</button>
+  </div>
+
+  <div id="painelSala" style="display:none;">
+    <div class="room-title" id="tituloSala"></div>
+    <div class="link-controls">
+      <input id="linkVideo" placeholder="Cole o link do vídeo MP4">
+      <button onclick="enviarLink()">Enviar</button>
+      <button class="clear-btn" onclick="document.getElementById('linkVideo').value = ''">🧹</button>
+    </div>
+    <video id="videoPlayer" controls></video>
+  </div>
+
+  <footer>
+    © 2025 Universal Player · Todos os direitos reservados.
+  </footer>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyBJS1ilaSPaRe1m3NUE9blpa7MGiRchvvo",
+    authDomain: "youfriends2025.firebaseapp.com",
+    databaseURL: "https://youfriends2025-default-rtdb.firebaseio.com",
+    projectId: "youfriends2025",
+    storageBucket: "youfriends2025.firebasestorage.app",
+    messagingSenderId: "1025903866437",
+    appId: "1:1025903866437:web:49401c0e8edf59dd63292c"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  let salaAtual = "";
+  let ignorarEvento = false;
+
+  function criarSala() {
+    const codigo = Math.floor(1000 + Math.random() * 9000).toString();
+    db.ref("salas/" + codigo).set({ video: "", playing: false }, () => {
+      alert("Sala criada: " + codigo);
+      document.getElementById("codigoSala").value = codigo;
+      entrarSala();
+    });
+  }
+
+  function entrarSala() {
+    const codigo = document.getElementById("codigoSala").value;
+    if (codigo.length !== 4) return alert("Código inválido");
+
+    db.ref("salas/" + codigo).once("value", snapshot => {
+      if (snapshot.exists()) {
+        salaAtual = codigo;
+        document.getElementById("painelSala").style.display = "block";
+        document.getElementById("tituloSala").innerText = "Sala: " + codigo;
+
+        const video = document.getElementById("videoPlayer");
+
+        db.ref("salas/" + codigo).on("value", snap => {
+          const dados = snap.val();
+          if (!dados) return;
+
+          if (dados.video && video.src !== dados.video) {
+            video.src = dados.video;
+            video.load();
+            if (dados.playing) video.play();
+          }
+
+          if (!ignorarEvento) {
+            if (dados.playing && video.paused) video.play();
+            if (!dados.playing && !video.paused) video.pause();
+          }
+        });
+
+        video.addEventListener("play", () => {
+          if (!ignorarEvento && salaAtual) {
+            db.ref("salas/" + salaAtual).update({ playing: true });
+          }
+        });
+
+        video.addEventListener("pause", () => {
+          if (!ignorarEvento && salaAtual) {
+            db.ref("salas/" + salaAtual).update({ playing: false });
+          }
+        });
+      } else {
+        alert("Sala não encontrada");
+      }
+    });
+  }
+
+  function enviarLink() {
+    const link = document.getElementById("linkVideo").value;
+    if (!link || !salaAtual) return alert("Link inválido");
+    db.ref("salas/" + salaAtual).update({ video: link, playing: true });
+  }
+</script>
+</body>
+</html>
